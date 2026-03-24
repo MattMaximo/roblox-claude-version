@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Roblox Engagement Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --border: #2a2d3a;
+    --text: #e4e4e7;
+    --muted: #8b8d97;
+    --accent: #6366f1;
+    --accent2: #22d3ee;
+    --green: #22c55e;
+    --red: #ef4444;
+    --orange: #f59e0b;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 32px;
+    min-height: 100vh;
+  }
+
+  /* Header */
+  .header { display:flex; align-items:baseline; gap:14px; margin-bottom:6px; }
+  .header h1 { font-size:28px; font-weight:700; letter-spacing:-0.5px; }
+  .header .ticker {
+    font-size:13px; color:var(--accent); font-weight:600;
+    background:rgba(99,102,241,0.12); padding:3px 10px; border-radius:6px;
+  }
+  .subtitle { color:var(--muted); font-size:13px; margin-bottom:28px; line-height:1.6; }
+  .subtitle a { color:var(--accent2); text-decoration:none; }
+  .subtitle a:hover { text-decoration:underline; }
+
+  /* KPI Cards */
+  .kpi-row { display:grid; grid-template-columns:repeat(5, 1fr); gap:14px; margin-bottom:28px; }
+  .kpi {
+    background:var(--card); border:1px solid var(--border);
+    border-radius:12px; padding:18px 20px;
+  }
+  .kpi-label {
+    font-size:11px; color:var(--muted); text-transform:uppercase;
+    letter-spacing:0.8px; margin-bottom:6px; font-weight:500;
+  }
+  .kpi-value { font-size:30px; font-weight:700; letter-spacing:-1px; line-height:1.1; }
+  .kpi-delta { font-size:12px; margin-top:4px; font-weight:600; }
+  .kpi-delta.up { color:var(--green); }
+  .kpi-delta.down { color:var(--red); }
+  .kpi-period { font-size:11px; color:var(--muted); margin-top:2px; }
+
+  /* Chart layout */
+  .chart-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-bottom:18px; }
+  .chart-card {
+    background:var(--card); border:1px solid var(--border);
+    border-radius:12px; padding:20px;
+  }
+  .chart-card.full { grid-column:1/-1; }
+  .chart-card h2 { font-size:15px; font-weight:600; margin-bottom:2px; }
+  .chart-card .desc { font-size:12px; color:var(--muted); margin-bottom:14px; }
+
+  /* Table */
+  .table-card {
+    background:var(--card); border:1px solid var(--border);
+    border-radius:12px; padding:20px; margin-bottom:18px; overflow-x:auto;
+  }
+  .table-card h2 { font-size:15px; font-weight:600; margin-bottom:14px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th {
+    text-align:left; color:var(--muted); font-weight:500; font-size:11px;
+    text-transform:uppercase; letter-spacing:0.6px; padding:8px 12px;
+    border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--card);
+  }
+  th.r, td.r { text-align:right; }
+  td { padding:8px 12px; border-bottom:1px solid rgba(42,45,58,0.4); }
+  tr:hover td { background:rgba(99,102,241,0.04); }
+  .g { color:var(--green); font-weight:500; }
+
+  /* Sources */
+  .sources { color:var(--muted); font-size:11px; line-height:1.9; }
+  .sources a { color:var(--accent2); text-decoration:none; }
+  .sources a:hover { text-decoration:underline; }
+
+  @media (max-width:1100px) {
+    .chart-grid { grid-template-columns:1fr; }
+    .kpi-row { grid-template-columns:repeat(3,1fr); }
+  }
+  @media (max-width:700px) {
+    body { padding:16px; }
+    .kpi-row { grid-template-columns:repeat(2,1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Roblox Engagement</h1>
+  <span class="ticker">NYSE: RBLX</span>
+</div>
+<div class="subtitle">
+  Quarterly DAU, hours engaged, and engagement intensity | Q1 2020 &ndash; Q4 2025<br>
+  Sources: <a href="https://ir.roblox.com/financials/quarterly-results" target="_blank">Roblox IR</a>,
+  <a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001315098&type=10-K" target="_blank">SEC EDGAR</a>,
+  S-1 Filing, Shareholder Letters
+</div>
+
+<div class="kpi-row" id="kpis"></div>
+
+<div class="chart-grid">
+  <div class="chart-card full">
+    <h2>Daily Active Users (DAU)</h2>
+    <div class="desc">Quarterly average, millions &mdash; color-coded by year</div>
+    <canvas id="cDau"></canvas>
+  </div>
+  <div class="chart-card">
+    <h2>Hours Engaged</h2>
+    <div class="desc">Billions per quarter</div>
+    <canvas id="cHours"></canvas>
+  </div>
+  <div class="chart-card">
+    <h2>Engagement Intensity</h2>
+    <div class="desc">Hours per DAU per day</div>
+    <canvas id="cIntensity"></canvas>
+  </div>
+  <div class="chart-card">
+    <h2>YoY Growth Rates</h2>
+    <div class="desc">DAU and Hours Engaged, % change year-over-year</div>
+    <canvas id="cYoy"></canvas>
+  </div>
+  <div class="chart-card">
+    <h2>DAU vs Engagement Intensity</h2>
+    <div class="desc">Scatter &mdash; are bigger audiences less engaged?</div>
+    <canvas id="cScatter"></canvas>
+  </div>
+</div>
+
+<div class="table-card">
+  <h2>Quarterly Data &mdash; Full History</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Quarter</th>
+        <th class="r">DAU (M)</th>
+        <th class="r">DAU YoY</th>
+        <th class="r">Hours (B)</th>
+        <th class="r">Hours YoY</th>
+        <th class="r">Hrs/DAU/Day</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<div class="sources">
+  <strong>Sources & methodology:</strong>
+  DAU and Hours Engaged sourced from Roblox quarterly earnings press releases, 10-K/10-Q SEC filings, and shareholder letters filed with the SEC.
+  Pre-IPO 2020 quarters derived from S-1 registration statement (filed Nov 2020) and YoY comparisons in Q1 2021 earnings.
+  Hours/DAU/Day = (hours_engaged &times; 10<sup>9</sup>) / (dau &times; 10<sup>6</sup> &times; days_in_quarter).
+  Roblox does not publish a recurring official MAU series; the company's standard KPIs are DAU and Hours Engaged.
+  Roblox ceased monthly metric reporting after March 2023.<br><br>
+  <a href="https://ir.roblox.com/financials/quarterly-results" target="_blank">Roblox Investor Relations &mdash; Quarterly Results</a> |
+  <a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001315098" target="_blank">SEC EDGAR (CIK 1315098)</a> |
+  <a href="https://www.sec.gov/Archives/edgar/data/1315098/000119312520298230/d87104ds1.htm" target="_blank">Roblox S-1 Filing</a>
+</div>
+
+<script>
+const D = [
+  {q:"Q1 '20",dau:23.6,hrs:5.00,hpd:2.33,yr:2020},
+  {q:"Q2 '20",dau:33.4,hrs:8.50,hpd:2.80,yr:2020},
+  {q:"Q3 '20",dau:36.2,hrs:8.70,hpd:2.61,yr:2020},
+  {q:"Q4 '20",dau:37.1,hrs:8.43,hpd:2.47,yr:2020},
+  {q:"Q1 '21",dau:42.1,hrs:9.67,hpd:2.55,yr:2021,dy:78.4,hy:93.5},
+  {q:"Q2 '21",dau:43.2,hrs:9.74,hpd:2.48,yr:2021,dy:29.3,hy:14.6},
+  {q:"Q3 '21",dau:47.3,hrs:11.18,hpd:2.57,yr:2021,dy:30.7,hy:28.6},
+  {q:"Q4 '21",dau:49.5,hrs:10.82,hpd:2.38,yr:2021,dy:33.4,hy:28.3},
+  {q:"Q1 '22",dau:54.1,hrs:11.82,hpd:2.43,yr:2022,dy:28.5,hy:22.2},
+  {q:"Q2 '22",dau:52.2,hrs:11.29,hpd:2.38,yr:2022,dy:20.8,hy:16.0},
+  {q:"Q3 '22",dau:58.8,hrs:13.40,hpd:2.48,yr:2022,dy:24.3,hy:19.8},
+  {q:"Q4 '22",dau:58.8,hrs:12.81,hpd:2.37,yr:2022,dy:18.8,hy:18.4},
+  {q:"Q1 '23",dau:66.1,hrs:14.49,hpd:2.44,yr:2023,dy:22.2,hy:22.6},
+  {q:"Q2 '23",dau:65.5,hrs:13.99,hpd:2.35,yr:2023,dy:25.5,hy:23.8},
+  {q:"Q3 '23",dau:70.2,hrs:16.04,hpd:2.48,yr:2023,dy:19.4,hy:19.7},
+  {q:"Q4 '23",dau:71.5,hrs:15.50,hpd:2.36,yr:2023,dy:21.6,hy:21.0},
+  {q:"Q1 '24",dau:77.7,hrs:16.70,hpd:2.36,yr:2024,dy:17.5,hy:15.2},
+  {q:"Q2 '24",dau:79.5,hrs:17.40,hpd:2.41,yr:2024,dy:21.4,hy:24.4},
+  {q:"Q3 '24",dau:88.9,hrs:20.70,hpd:2.53,yr:2024,dy:26.6,hy:29.1},
+  {q:"Q4 '24",dau:85.3,hrs:18.70,hpd:2.38,yr:2024,dy:19.3,hy:20.6},
+  {q:"Q1 '25",dau:97.8,hrs:21.70,hpd:2.47,yr:2025,dy:25.9,hy:29.9},
+  {q:"Q2 '25",dau:111.8,hrs:27.40,hpd:2.69,yr:2025,dy:40.6,hy:57.5},
+  {q:"Q3 '25",dau:151.5,hrs:39.60,hpd:2.84,yr:2025,dy:70.4,hy:91.3},
+  {q:"Q4 '25",dau:144.0,hrs:35.00,hpd:2.64,yr:2025,dy:68.8,hy:87.2},
+];
+
+// ── Globals ──
+const labels = D.map(d=>d.q);
+const pct = n => n!=null ? (n>=0?'+':'')+n.toFixed(1)+'%' : '\u2014';
+Chart.defaults.color = '#8b8d97';
+Chart.defaults.borderColor = 'rgba(42,45,58,0.6)';
+Chart.defaults.font.family = "-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif";
+Chart.defaults.font.size = 11;
+Chart.defaults.plugins.legend.labels.usePointStyle = true;
+Chart.defaults.plugins.legend.labels.pointStyleWidth = 8;
+const grid = {color:'rgba(42,45,58,0.5)'};
+const tip = {
+  backgroundColor:'#1e2030',titleColor:'#e4e4e7',bodyColor:'#e4e4e7',
+  borderColor:'#2a2d3a',borderWidth:1,cornerRadius:8,padding:12,
+  titleFont:{weight:'600'}
+};
+
+// ── Year colors for DAU bars ──
+const yrColor = {'2020':'#4338ca','2021':'#6366f1','2022':'#818cf8','2023':'#a5b4fc','2024':'#22d3ee','2025':'#06b6d4'};
+
+// ── KPI Cards ──
+const last = D[D.length-1];
+const peak = D.reduce((a,b)=>a.dau>b.dau?a:b);
+const kpis = [
+  {l:'Latest DAU',v:last.dau.toFixed(1)+'M',d:last.dy,p:last.q},
+  {l:'Hours Engaged',v:last.hrs.toFixed(1)+'B',d:last.hy,p:last.q},
+  {l:'Hrs / DAU / Day',v:last.hpd.toFixed(2),d:((last.hpd/D[D.length-5].hpd-1)*100),p:last.q},
+  {l:'Peak DAU Quarter',v:peak.dau.toFixed(1)+'M',d:null,p:peak.q},
+  {l:'FY 2025 Avg DAU',v:'127M',d:((127/82.9-1)*100),p:'Full Year'},
+];
+document.getElementById('kpis').innerHTML = kpis.map(k=>{
+  const dc = k.d!=null?(k.d>=0?'up':'down'):'';
+  const dt = k.d!=null?pct(k.d)+' YoY':'';
+  return `<div class="kpi">
+    <div class="kpi-label">${k.l}</div>
+    <div class="kpi-value">${k.v}</div>
+    ${dt?`<div class="kpi-delta ${dc}">${dt}</div>`:''}
+    <div class="kpi-period">${k.p}</div>
+  </div>`;
+}).join('');
+
+// ── Chart: DAU ──
+new Chart(document.getElementById('cDau'),{
+  type:'bar',
+  data:{labels,datasets:[{
+    label:'DAU (M)',
+    data:D.map(d=>d.dau),
+    backgroundColor:D.map(d=>yrColor[d.yr]),
+    borderRadius:4,borderSkipped:false,
+  }]},
+  options:{
+    responsive:true,maintainAspectRatio:true,aspectRatio:3,
+    plugins:{
+      legend:{display:false},
+      tooltip:{...tip,callbacks:{label:c=>`DAU: ${c.parsed.y.toFixed(1)}M`}}
+    },
+    scales:{
+      x:{grid:{display:false}},
+      y:{grid,ticks:{callback:v=>v+'M'},beginAtZero:true}
+    }
+  }
+});
+
+// ── Chart: Hours ──
+new Chart(document.getElementById('cHours'),{
+  type:'bar',
+  data:{labels,datasets:[{
+    label:'Hours (B)',data:D.map(d=>d.hrs),
+    backgroundColor:'rgba(34,211,238,0.65)',borderRadius:3,borderSkipped:false,
+  }]},
+  options:{
+    responsive:true,
+    plugins:{legend:{display:false},tooltip:{...tip,callbacks:{label:c=>c.parsed.y.toFixed(1)+'B hours'}}},
+    scales:{x:{grid:{display:false},ticks:{maxRotation:45}},y:{grid,ticks:{callback:v=>v+'B'},beginAtZero:true}}
+  }
+});
+
+// ── Chart: Intensity ──
+new Chart(document.getElementById('cIntensity'),{
+  type:'line',
+  data:{labels,datasets:[{
+    label:'Hrs/DAU/Day',data:D.map(d=>d.hpd),
+    borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,0.08)',
+    fill:true,tension:0.3,pointRadius:3,pointHoverRadius:6,pointBackgroundColor:'#f59e0b',
+  }]},
+  options:{
+    responsive:true,
+    plugins:{legend:{display:false},tooltip:{...tip,callbacks:{label:c=>c.parsed.y.toFixed(2)+' hrs/DAU/day'}}},
+    scales:{x:{grid:{display:false},ticks:{maxRotation:45}},y:{grid,min:2.0,max:3.0,ticks:{callback:v=>v.toFixed(1)}}}
+  }
+});
+
+// ── Chart: YoY ──
+const yD = D.filter(d=>d.dy!=null);
+new Chart(document.getElementById('cYoy'),{
+  type:'line',
+  data:{
+    labels:yD.map(d=>d.q),
+    datasets:[
+      {label:'DAU YoY %',data:yD.map(d=>d.dy),borderColor:'#6366f1',fill:false,tension:0.3,pointRadius:3,pointHoverRadius:6},
+      {label:'Hours YoY %',data:yD.map(d=>d.hy),borderColor:'#22d3ee',fill:false,tension:0.3,pointRadius:3,pointHoverRadius:6},
+    ]
+  },
+  options:{
+    responsive:true,
+    plugins:{legend:{position:'top'},tooltip:{...tip,callbacks:{label:c=>c.dataset.label+': +'+c.parsed.y.toFixed(1)+'%'}}},
+    scales:{x:{grid:{display:false},ticks:{maxRotation:45}},y:{grid,ticks:{callback:v=>v+'%'}}}
+  }
+});
+
+// ── Chart: Scatter ──
+new Chart(document.getElementById('cScatter'),{
+  type:'scatter',
+  data:{datasets:[
+    {label:'2020',data:D.filter(d=>d.yr===2020).map(d=>({x:d.dau,y:d.hpd,q:d.q})),backgroundColor:'#4338ca',pointRadius:6},
+    {label:'2021',data:D.filter(d=>d.yr===2021).map(d=>({x:d.dau,y:d.hpd,q:d.q})),backgroundColor:'#6366f1',pointRadius:6},
+    {label:'2022',data:D.filter(d=>d.yr===2022).map(d=>({x:d.dau,y:d.hpd,q:d.q})),backgroundColor:'#818cf8',pointRadius:6},
+    {label:'2023',data:D.filter(d=>d.yr===2023).map(d=>({x:d.dau,y:d.hpd,q:d.q})),backgroundColor:'#a5b4fc',pointRadius:6},
+    {label:'2024',data:D.filter(d=>d.yr===2024).map(d=>({x:d.dau,y:d.hpd,q:d.q})),backgroundColor:'#22d3ee',pointRadius:7},
+    {label:'2025',data:D.filter(d=>d.yr===2025).map(d=>({x:d.dau,y:d.hpd,q:d.q})),backgroundColor:'#06b6d4',pointRadius:8},
+  ]},
+  options:{
+    responsive:true,
+    plugins:{
+      legend:{position:'top'},
+      tooltip:{...tip,callbacks:{
+        label:c=>`${c.raw.q}: ${c.raw.x.toFixed(1)}M DAU, ${c.raw.y.toFixed(2)} hrs/day`
+      }}
+    },
+    scales:{
+      x:{title:{display:true,text:'DAU (millions)',color:'#8b8d97'},grid,ticks:{callback:v=>v+'M'}},
+      y:{title:{display:true,text:'Hours / DAU / Day',color:'#8b8d97'},grid,min:2.0,max:3.0,ticks:{callback:v=>v.toFixed(1)}}
+    }
+  }
+});
+
+// ── Data Table ──
+document.getElementById('tbody').innerHTML = D.slice().reverse().map(d=>{
+  const dyH = d.dy!=null?`<span class="g">${pct(d.dy)}</span>`:'\u2014';
+  const hyH = d.hy!=null?`<span class="g">${pct(d.hy)}</span>`:'\u2014';
+  return `<tr>
+    <td>${d.q}</td>
+    <td class="r">${d.dau.toFixed(1)}</td>
+    <td class="r">${dyH}</td>
+    <td class="r">${d.hrs.toFixed(2)}</td>
+    <td class="r">${hyH}</td>
+    <td class="r">${d.hpd.toFixed(2)}</td>
+  </tr>`;
+}).join('');
+</script>
+</body>
+</html>
